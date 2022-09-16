@@ -55,10 +55,9 @@ def tapas_softmax_mu3(r=None, infStates=None, ptrans=None):
     # Responses
     y = r.y[:, 0]
     # Weed irregular trials out from inferred states and responses
-    # TODO
-    states[r.irr, :] = np.empty()
-    mu3 = np.delete(mu3, r.irr)
-    y = np.delete(y, r.irr)
+    states[r.irr, :] = np.array([])
+    mu3[r.irr] = np.array([])
+    y[r.irr] = np.array([])
     # Inverse decision temperature
     be = np.exp(- mu3)
     be = np.matlib.repmat(be, 1, nc)
