@@ -55,9 +55,10 @@ def tapas_softmax_mu3(r=None, infStates=None, ptrans=None):
     # Responses
     y = r.y[:, 0]
     # Weed irregular trials out from inferred states and responses
-    states[r.irr, :] = []
-    mu3[r.irr] = []
-    y[r.irr] = []
+    # TODO
+    states[r.irr, :] = np.empty()
+    mu3 = np.delete(mu3, r.irr)
+    y = np.delete(y, r.irr)
     # Inverse decision temperature
     be = np.exp(- mu3)
     be = np.matlib.repmat(be, 1, nc)
@@ -106,14 +107,14 @@ def tapas_softmax_mu3_config():
     # Sufficient statistics of Gaussian parameter priors
 
     # Gather prior settings in vectors
-    c.priormus = []
-    c.priorsas = []
+    c.priormus = np.array([])
+    c.priorsas = np.array([])
     # Model filehandle
     c.obs_fun = tapas_softmax_mu3
     # Handle to function that transforms observation parameters to their native space
     # from the space they are estimated in
     c.transp_obs_fun = lambda r, ptrans: {
-        'pvec': [],
+        'pvec': np.array([]),
         'pstruct': {}
     }
     return c
