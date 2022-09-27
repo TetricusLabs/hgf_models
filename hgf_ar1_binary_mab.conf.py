@@ -277,9 +277,9 @@ def tapas_hgf_ar1_binary_mab(r = None,p = None,varargin = None):
     om = p(np.arange(5 * l,6 * l - 2+1))
     th = np.exp(p(6 * l - 1))
     # Add dummy zeroth trial
-    u = np.array([[0],[r.u(:,1)]])
+    u = np.array(0,[r.u[:,0]])
     try:
-        y = np.array([[1],[r.y(:,1)]])
+        y = np.array(1,r.y[:,0])
         irr = r.irr
     finally:
         pass
@@ -289,7 +289,7 @@ def tapas_hgf_ar1_binary_mab(r = None,p = None,varargin = None):
     # Construct time axis
     if r.c_prc.irregular_intervals:
         if u.shape[2-1] > 1:
-            t = np.array([[0],[r.u(:,end())]])
+            t = np.array(0,[r.u[:,end())]])
         else:
             raise Exception('tapas:hgf:InputSingleColumn','Input matrix must contain more than one column if irregular_intervals is set to true.')
     else:
@@ -312,14 +312,14 @@ def tapas_hgf_ar1_binary_mab(r = None,p = None,varargin = None):
     # at the end; their presence simply leads to consistent
     # trial indices.
     mu[1,1,:] = tapas_sgm(mu_0(2),1)
-    muhat[1,1,:] = mu(1,1,:)
+    muhat[1,1,:] = mu[1,1,:]
     pihat[1,1,:] = 0
     np.pi[1,1,:] = np.Inf
     mu[1,np.arange[2,end()+1],:] = np.matlib.repmat(mu_0(np.arange(2,end()+1)),np.array([1,1,b]))
     np.pi[1,np.arange[2,end()+1],:] = np.matlib.repmat(1.0 / sa_0(np.arange(2,end()+1)),np.array([1,1,b]))
     # Pass through representation update loop
-    for k in np.arange(2,n+1,1).reshape(-1):
-        if not_(ismember(k - 1,r.ign)):
+    for k in range(1, n):
+        if not k in r['ign']:
             ######################
             # Effect of input u(k)
             ######################
