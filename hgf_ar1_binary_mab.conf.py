@@ -79,15 +79,13 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
     if not len(varargin) == 0 and str(varargin[0]) == str('trans'):
         p = tapas_hgf_ar1_binary_mab_transp(r, p)
 
-    try:
-        l = r.c_prc.n_levels
-    finally:
-        pass
+    l = r.c_prc.n_levels
+    if l % 5:
+      raise RuntimeError('Cannot determine number of levels')
 
-    try:
-        b = r.c_prc.n_bandits
-    finally:
-        pass
+    b = r.c_prc.n_bandits
+    if not b:
+      raise RuntimeError('Number of bandits must be configured')
 
     coupled = False
     if r.c_prc.coupled == True:
@@ -97,89 +95,95 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
             raise Exception('tapas:hgf:HgfBinaryMab:CoupledOnlyForTwo',
                             'Coupled updating can only be configured for 2 bandits.')
 
-    mu_0 = p(np.arange(1, l+1))
-    sa_0 = p(np.arange(l + 1, 2 * l+1))
-    phi = p(np.arange(2 * l + 1, 3 * l+1))
-    m = p(np.arange(3 * l + 1, 4 * l+1))
-    ka = p(np.arange(4 * l + 1, 5 * l - 1+1))
-    om = p(np.arange(5 * l, 6 * l - 2+1))
-    th = np.exp(p(6 * l - 1))
+    mu_0 = p[0:l]
+    sa_0 = p[l:2 * l]
+    
+    # the l seems to bounce from and back from 0-based indexing to 1-based indexing
+    # i can infer the indexes from looking at some matlab -> python code but
+    # can't find the indexing easily for phi or m or u
+    phi = p[l+1:2*l]
+    m = p[2*l+1:3*l]
     u = np.array([0, r.u[:, 1]])
+
+    # these values should be okay
+    ka = p[3*l:4*l-1]
+    om = p[4*l-1:5*l-2]
+    with np.errstate(divide='ignore'): th = np.exp(p[5*l-2])
+
     try:
         y = np.array([1, r.y[:, 1]])
         irr = r.irr
     finally:
         pass
 
-    n = u.shape[1-1]
+    n = u.shape[0]
     if r.c_prc.irregular_intervals:
         if u.shape[2-1] > 1:
-            t = np.array([0, r.u[:, end())])
+            t = np.array(0, r.u[:, -1])
         else:
-            raise Exception('tapas:hgf:InputSingleColumn',
-                            'Input matrix must contain more than one column if irregular_intervals is set to true.')
+            raise Exception('tapas:hgf:InputSingleColumn', 'Input matrix must contain more than one column if irregular_intervals is set to true.')
     else:
         t = np.ones((n, 1))
 
 
-    mu = np.full([n, l, b], np.nan)
-    np.pi = np.full([n, l, b], np.nan)
-    muhat = np.full([n, l, b], np.nan)
-    pihat = np.full([n, l, b], np.nan)
-    v = np.full([n, l], np.nan)
-    w = np.full([n, l - 1], np.nan)
-    da = np.full([n, l], np.nan)
-    mu[1, 1, :] = tapas_sgm(mu_0(2), 1)
-    muhat[1, 1, :] = mu(1, 1, : )
-    pihat[1, 1, :] = 0
-    np.pi[1, 1, :] = np.Inf
-    mu[1, np.arange[2, end()+1], :] = np.matlib.repmat(mu_0(np.arange(2,
-                                                                      end()+1)), np.array([1, 1, b]))
-    np.pi[1, np.arange[2, end()+1], :] = np.matlib.repmat(1.0 /
-                                                          sa_0(np.arange(2, end()+1)), np.array([1, 1, b]))
+    mu = np.empty(n, l, b) * np.nan
+    pi = np.empty(n, l, b) * np.nan
+    muhat = np.empty(n, l, b) * np.nan
+    pihat = np.empty(n, l, b) * np.nan
+    v = np.empty(n, l) * np.nan
+    w = np.empty(n, l - 1) * np.nan
+    da = np.empty(n, l) * np.nan
+    mu[0, 0, :] = tapas_sgm(mu_0[0], 1)
+    muhat[0, 0, :] = mu[0, 0, :]
+
+    # is 0 correct here? Or is it 0 indexed and should be -1?
+    pihat[0, 0, :] = 0
+    pi[0, 0, :] = np.Inf
+    mu[0, 1:, :] = np.matlib.repmat(mu_0[1:], np.array([1, 1, b]))
+    pi[1, np.arange[2, end()+1], :] = np.matlib.repmat(1.0 / sa_0(np.arange(2, end()+1)), np.array([1, 1, b]))
     for k in np.arange(2, n+1, 1).reshape(-1):
         if not ismember(k - 1, r.ign):
             muhat[k, 2, :] = mu(k - 1, 2, :) + t(k) * phi(2) * (m(2) - mu(k - 1, 2, : ))
             muhat[k, 1, :] = tapas_sgm(ka(1) * muhat(k, 2, :), 1)
             pihat[k, 1, :] = 1 / (np.multiply(muhat(k, 1, : ), (1 - muhat(k, 1, : ))))
-            np.pi[k, 1, :] = pihat(k, 1, : )
-            np.pi[k, 1, y[k]] = np.Inf
+            pi[k, 1, :] = pihat(k, 1, : )
+            pi[k, 1, y[k]] = np.Inf
             mu[k, 1, :] = muhat(k, 1, : )
             mu[k, 1, y[k]] = u(k)
             da[k, 1] = mu(k, 1, y(k)) - muhat(k, 1, y(k))
-            pihat[k, 2, :] = 1 / (1 / np.pi(k - 1, 2, :) + np.exp(ka(2) * mu(k - 1, 3, : ) + om(2)))
-            np.pi[k, 2, :] = pihat(k, 2, :) + ka(1) ** 2 / pihat(k, 1, : )
+            pihat[k, 2, :] = 1 / (1 / pi(k - 1, 2, :) + np.exp(ka(2) * mu(k - 1, 3, : ) + om(2)))
+            pi[k, 2, :] = pihat(k, 2, :) + ka(1) ** 2 / pihat(k, 1, : )
             mu[k, 2, :] = muhat(k, 2, : )
             mu[k, 2, y[k]] = muhat(k, 2, y(k)) + ka(1) / \
-                np.pi(k, 2, y(k)) * da(k, 1)
-            da[k, 2] = (1 / np.pi(k, 2, y(k)) + (mu(k, 2, y(k)) -
+                pi(k, 2, y(k)) * da(k, 1)
+            da[k, 2] = (1 / pi(k, 2, y(k)) + (mu(k, 2, y(k)) -
                         muhat(k, 2, y(k))) ** 2) * pihat(k, 2, y(k)) - 1
             if l > 3:
                 for j in np.arange(3, l - 1+1).reshape(-1):
                     muhat[k, j, :] = mu(k - 1, j, :) + t(k) * phi(j) * (m(j) - mu(k - 1, j))
-                    pihat[k, j, :] = 1 / (1 / np.pi(k - 1, j, :) + t(k) * np.exp(ka(j) * mu(k - 1, j + 1, : ) + om(j)))
+                    pihat[k, j, :] = 1 / (1 / pi(k - 1, j, :) + t(k) * np.exp(ka(j) * mu(k - 1, j + 1, : ) + om(j)))
                     v[k, j - 1] = t(k) * np.exp(ka(j - 1) *
                                                 mu(k - 1, j, y(k)) + om(j - 1))
                     w[k, j - 1] = v(k, j - 1) * pihat(k, j - 1, y(k))
-                    np.pi[k, j, :] = pihat(k, j, : ) + 1 / 2 * ka(j - 1) ** 2 * w(k, j - 1) * (w(k, j - 1) + (2 * w(k, j - 1) - 1) * da(k, j - 1))
-                    if np.pi(k, j, 1) <= 0:
+                    pi[k, j, :] = pihat(k, j, : ) + 1 / 2 * ka(j - 1) ** 2 * w(k, j - 1) * (w(k, j - 1) + (2 * w(k, j - 1) - 1) * da(k, j - 1))
+                    if pi(k, j, 1) <= 0:
                         raise Exception(
                             'tapas:hgf:NegPostPrec', 'Negative posterior precision. Parameters are in a region where model assumptions are violated.')
-                    mu[k, j, :] = muhat(k, j, :) + 1 / 2 * 1 / np.pi(k, j) * ka(j - 1) * w(k, j - 1) * da(k, j - 1)
-                    da[k, j] = (1 / np.pi(k, j, y(k)) + (mu(k, j, y(k)) -
+                    mu[k, j, :] = muhat(k, j, :) + 1 / 2 * 1 / pi(k, j) * ka(j - 1) * w(k, j - 1) * da(k, j - 1)
+                    da[k, j] = (1 / pi(k, j, y(k)) + (mu(k, j, y(k)) -
                                 muhat(k, j, y(k))) ** 2) * pihat(k, j, y(k)) - 1
             muhat[k, l, :] = mu(k - 1, l, :) + t(k) * phi(l) * (m(l) - mu(k - 1, l))
-            pihat[k, l, :] = 1 / (1 / np.pi(k - 1, l, : ) + t(k) * th)
+            pihat[k, l, :] = 1 / (1 / pi(k - 1, l, : ) + t(k) * th)
             v[k, l] = t(k) * th
             v[k, l - 1] = t(k) * np.exp(ka(l - 1) *
                                         mu(k - 1, l, y(k)) + om(l - 1))
             w[k, l - 1] = v(k, l - 1) * pihat(k, l - 1, y(k))
-            np.pi[k, l, :] = pihat(k, l, : ) + 1 / 2 * ka(l - 1) ** 2 * w(k, l - 1) * (w(k, l - 1) + (2 * w(k, l - 1) - 1) * da(k, l - 1))
-            if np.pi(k, l, 1) <= 0:
+            pi[k, l, :] = pihat(k, l, : ) + 1 / 2 * ka(l - 1) ** 2 * w(k, l - 1) * (w(k, l - 1) + (2 * w(k, l - 1) - 1) * da(k, l - 1))
+            if pi(k, l, 1) <= 0:
                 raise Exception(
                     'tapas:hgf:NegPostPrec', 'Negative posterior precision. Parameters are in a region where model assumptions are violated.')
-            mu[k, l, :] = muhat(k, l, :) + 1 / 2 * 1 / np.pi(k, l, : ) * ka(l - 1) * w(k, l - 1) * da(k, l - 1)
-            da[k, l] = (1 / np.pi(k, l, y(k)) + (mu(k, l, y(k)) -
+            mu[k, l, :] = muhat(k, l, :) + 1 / 2 * 1 / pi(k, l, : ) * ka(l - 1) * w(k, l - 1) * da(k, l - 1)
+            da[k, l] = (1 / pi(k, l, y(k)) + (mu(k, l, y(k)) -
                         muhat(k, l, y(k))) ** 2) * pihat(k, l, y(k)) - 1
             if coupled == True:
                 if y(k) == 1:
@@ -192,7 +196,7 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
                             1 - tapas_sgm(mu(k, 2, 2), 1), 1)
         else:
             mu[k, :, :] = mu(k - 1, :, : )
-            np.pi[k, :, :] = np.pi(k - 1, :, : )
+            pi[k, :, :] = pi(k - 1, :, : )
             muhat[k, :, :] = muhat(k - 1, :, : )
             pihat[k, :, :] = pihat(k - 1, :, : )
             v[k, :] = v(k - 1, : )
@@ -200,13 +204,13 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
             da[k, :] = da(k - 1, : )
 
     mu[1, :, :] = []
-    np.pi[1, :, :] = []
-    if np.any(np.isnan(mu)) or np.any(np.isnan(np.pi)):
+    pi[1, :, :] = []
+    if np.any(np.isnan(mu)) or np.any(np.isnan(pi)):
         raise Exception('tapas:hgf:VarApproxInvalid',
                         'Variational approximation invalid. Parameters are in a region where model assumptions are violated.')
     else:
         dmu = np.diff(mu(: , np.arange(2, end()+1)))
-        dpi = np.diff(np.pi(: , np.arange(2, end()+1)))
+        dpi = np.diff(pi(: , np.arange(2, end()+1)))
         rmdmu = np.matlib.repmat(np.sqrt(mean(dmu ** 2)), len(dmu), 1)
         rmdpi = np.matlib.repmat(np.sqrt(mean(dpi ** 2)), len(dpi), 1)
         jumpTol = 16
@@ -238,7 +242,7 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
     lr1[setdiff[np.arange[1, n - 1+1], irr]] = lr1reg
     traj = {}
     traj.mu = mu
-    traj.sa = 1.0 / np.pi
+    traj.sa = 1.0 / pi
     traj.muhat = muhat
     traj.sahat = 1.0 / pihat
     traj.v = v
@@ -246,7 +250,7 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
     traj.da = da
     traj.ud = mu - muhat
     psi = np.full([n - 1, l], np.nan)
-    pi2 = np.squeeze(np.pi(:, 2, : ))
+    pi2 = np.squeeze(pi(:, 2, : ))
     pi2[irr, :] = []
     pi2obs = pi2(sub2ind(pi2.shape, np.transpose(
         (np.arange(1, pi2.shape[1-1]+1))), yreg))
@@ -256,7 +260,7 @@ def tapas_hgf_ar1_binary_mab(r=None, p=None, varargin=None):
         pihati[irr, :] = []
         pihatiobs = pihati(sub2ind(pihati.shape, np.transpose(
             (np.arange(1, pihati.shape[1-1]+1))), yreg))
-        pii = np.squeeze(np.pi(:, i, : ))
+        pii = np.squeeze(pi(:, i, : ))
         pii[irr, :] = []
         piiobs = pii(sub2ind(pii.shape, np.transpose(
             (np.arange(1, pii.shape[1-1]+1))), yreg))
