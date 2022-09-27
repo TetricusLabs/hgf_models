@@ -11,14 +11,14 @@ r = SimpleNamespace()
 
 r.y = np.zeros((160, 1))
 r.u = np.zeros((160, 1))
-r.ign = []
-r.irr = []
+r.ign = np.array([])
+r.irr = np.array([])
 r.c_prc = {}
 x = SimpleNamespace()
 x.predorpost = 1
 x.model = 'softmax_mu3'
-x.priormus = []
-x.priorsas = []
+x.priormus = np.array([])
+x.priorsas = np.array([])
 r.c_obs = x
 
 
