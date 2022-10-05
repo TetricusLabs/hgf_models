@@ -27,7 +27,7 @@ def tapas_softmax_mu3(r=None, infStates=None, ptrans=None):
 
     pop = 0
 
-    if r.c_obs.predorpost == 1:
+    if r['c_obs']['predorpost'] == 1:
         pop = 2
 
     n = infStates.shape[0]
@@ -38,17 +38,19 @@ def tapas_softmax_mu3(r=None, infStates=None, ptrans=None):
     nc = infStates.shape[2]
     states = np.squeeze(infStates[:, 0, :, pop])
     mu3 = np.squeeze(infStates[:, 2, 0, 2])
-    y = r.y[:, 0]
-    states[r.irr, :] = np.array([])
-    mu3[r.irr] = np.array([])
-    y[r.irr] = np.array([])
+    y = r['y'][:, 0]
+    # ????
+    # states[r.irr, :] = np.array([])
+    states = np.delete(states, [r['irr'], :])
+    mu3 = np.delete(mu3, r['irr'])
+    y = np.delete(y, r['irr'])
     be = np.exp(- mu3)
     be = np.matlib.repmat(be, 1, nc)
     Z = np.sum(np.exp(np.multiply(be, states)), 1)
     Z = np.matlib.repmat(Z, 1, nc)
     prob = np.exp(np.multiply(be, states)) / Z
     probc = prob(sub2ind(prob.shape, np.arange(1, len(y)+1), np.transpose(y)))
-    reg = not ismember(np.arange(1, n+1), r.irr)
+    reg = not ismember(np.arange(1, n+1), r['irr'])
     logp[reg] = np.log(probc)
     yhat[reg] = probc
     res[reg] = - np.log(probc)
